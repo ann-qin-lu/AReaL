@@ -110,6 +110,16 @@ class MegatronEngine(TrainEngine):
         self.tokenizer = load_hf_tokenizer(self.config.path)
         self.bridge = mbridge.AutoBridge.from_pretrained(self.config.path)
         self.bridge.dtype = self.dtype
+        # Set gradient checkpointing options
+        if self.config.gradient_checkpointing:
+            self.bridge.set_extra_args(
+                recompute_granularity=self.mcore_config.recompute_granularity,
+                recompute_method=self.mcore_config.recompute_method,
+                recompute_num_layers=self.mcore_config.recompute_num_layers,
+                distribute_saved_activations=self.mcore_config.distribute_saved_activations,
+                recompute_modules=self.mcore_config.recompute_modules,
+            )
+
         self.logger.info(
             "Using mbridge to create models and hf model save/load in MegatronEngine."
         )
