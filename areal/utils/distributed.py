@@ -39,7 +39,10 @@ def init_custom_process_group(
         backend = Backend("undefined")
 
     if timeout is None:
-        timeout = default_pg_timeout
+        import datetime
+        # override timeout to 1hr
+        timeout = datetime.timedelta(seconds=3600)
+        # timeout = default_pg_timeout
 
     # backward compatible API
     if store is None:

@@ -42,6 +42,7 @@ from areal.utils.model import (
     disable_dropout_in_model,
     is_qwen2_vl_model,
     is_qwen3_moe_model,
+    is_llama_model
 )
 from areal.utils.nccl import NCCL_DEFAULT_TIMEOUT
 
@@ -64,6 +65,7 @@ class BaseHFEngine(TrainEngine):
         self.own_global_group = False
         self._parallelism_group: dist.ProcessGroup
         self.mp_group: dist.ProcessGroup
+        self._sync_group: dist.ProcessGroup
         self.weight_update_group_initialized = False
 
         self.model_config = AutoConfig.from_pretrained(
@@ -108,12 +110,17 @@ class BaseHFEngine(TrainEngine):
     def context_and_model_parallel_group(self) -> dist.ProcessGroup:
         assert self.initialized
         return self.mp_group
-
+    
     @property
     def parallelism_group(self) -> dist.ProcessGroup:
         assert self.initialized
         return _get_default_group()
-
+    
+    @property
+    def sync_group(self) -> dist.ProcessGroup:
+        assert self.initialized
+        return self._sync_group
+    
     def create_process_group(self, parallel_strategy: ParallelStrategy | None = None):
         # Required by NCCL weight update group for SGLang
         os.environ["NCCL_CUMEM_ENABLE"] = "0"
@@ -127,10 +134,15 @@ class BaseHFEngine(TrainEngine):
                 timeout=NCCL_DEFAULT_TIMEOUT,
             )
             self.own_global_group = True
-        # Each process is its own model parallel group.
-        self.mp_group = dist.new_group([dist.get_rank()])
+            # set a long timeout on CPU group, so that it can be set
+            import datetime
+            long_timeout = datetime.timedelta(seconds=7200)
+            self._sync_group = dist.new_group(timeout=long_timeout, backend="gloo")
 
-        self.logger = logging.getLogger(f"[HF Engine Rank {dist.get_rank()}]")
+        # Each process is its own model parallel group.
+        self.mp_group = dist.new_group([dist.get_rank()], timeout=NCCL_DEFAULT_TIMEOUT)
+
+        self.logger = logging.getLogger(f"[HF Engine Rank {dist.get_rank()}]")  
 
     def create_device_model(self):
         current_platform.set_device(int(os.environ["LOCAL_RANK"]))
@@ -366,7 +378,7 @@ class BaseHFEngine(TrainEngine):
             ]
             mb["use_cache"] = False
             padded_mb["use_cache"] = False
-            if is_qwen3_moe_model(self.model_config.model_type):
+            if is_qwen3_moe_model(self.model_config.model_type) or is_llama_model(self.model_config.model_type):
                 mb["attention_mask"] = None
                 padded_mb["attention_mask"] = None
             else:

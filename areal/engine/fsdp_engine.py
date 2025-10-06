@@ -55,7 +55,40 @@ from areal.utils.ulysses import (
     ulysses_pad,
     ulysses_pad_and_slice_inputs,
 )
+import torch
+import torch.distributed as dist
+from datetime import timedelta
 
+def get_pg_timeout(pg: dist.ProcessGroup, pg_name, default = None):
+    # 1) try the group’s bound device (if any)
+    dev = getattr(pg, "bound_device_id", None)
+    try_devices = []
+    if isinstance(dev, torch.device):
+        try_devices.append(dev)
+    # 2) common fallbacks
+    try_devices += [torch.device("cuda", 0)] if torch.cuda.is_available() else []
+    try_devices += [torch.device("cpu")]
+
+    for d in try_devices:
+        try:
+            backend = pg._get_backend(d)                # private API
+            opts = backend.options                      # backend-specific Options
+            return_val = getattr(opts, "_timeout", default)   # private field
+            print(f"print pg ALL funcs {sorted(dir(pg))}")
+
+            print(f"print pg {pg_name}, original timeout {return_val}. trying to set timeout")
+            if return_val:
+                from datetime import timedelta
+                new_td = timedelta(minutes=30)
+                backend._set_default_timeout(new_td)                
+                # pg._set_default_timeout(new_td)   # apply to this PG going forward
+                print(f"print pg {pg_name}, original timeout {return_val}. setting to new time {getattr(opts, "_timeout", default)}")
+            return return_val
+
+        except Exception as e:
+            print(f"print pg ERROR: {e}")
+            continue
+    return default
 
 class FSDPEngine(BaseHFEngine):
     def __init__(self, config: TrainEngineConfig):
@@ -140,13 +173,21 @@ class FSDPEngine(BaseHFEngine):
             mesh_shape=(self.dp_world_size, self.sp_world_size, self.tp_world_size),
             mesh_dim_names=("dp", "sp", "tp"),
         )
+        # def _print_pg_timeout(pg, pg_name):
+            
+        #     print(f"print pg {pg_name}, timeout as {get_pg_timeout(pg, pg_name)}")
 
         self.dp_group = nd_device_mesh["dp"].get_group()
         self.sp_group = nd_device_mesh["sp"].get_group()
+        get_pg_timeout(self.dp_group, "self.dp_group")
+        get_pg_timeout(self.sp_group, "self.sp_group")
+        get_pg_timeout(self.fsdp_tp_device_mesh["fsdp"].get_group(), "fsdp")
+        get_pg_timeout(self.fsdp_tp_device_mesh["tp"].get_group(), "tp")
 
         nd_device_mesh["sp", "tp"]._flatten(mesh_dim_name="mp")
 
         self.mp_group = nd_device_mesh["mp"].get_group()
+        get_pg_timeout(self.mp_group, "self.mp_group")
 
         self.rank = dist.get_rank()
 

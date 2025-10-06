@@ -565,6 +565,9 @@ class InferenceEngineConfig:
     request_retries: int = field(
         default=3, metadata={"help": "Number of retries for failed requests."}
     )
+    episode_timeout_minutes: int = field(
+        default=30, metadata={"help": "Timeout limit for each episode."}
+    )
 
 
 @dataclass
@@ -726,6 +729,12 @@ class DatasetConfig:
         default=MISSING,
         metadata={
             "help": "Path to the dataset. Can be a local path or a HuggingFace dataset name."
+        },
+    )
+    split: str = field(
+        default='train',
+        metadata={
+            "help": "split of the HF dataset."
         },
     )
     type: Optional[str] = field(

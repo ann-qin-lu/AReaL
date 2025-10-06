@@ -96,7 +96,7 @@ class MegatronEngine(TrainEngine):
         # TODO: add parallel_strategy & seed in engine api when moving out of experimental
         if self.parallel_strategy is None:
             self.parallel_strategy = self._make_parallel_strategy(parallel_strategy)
-        self._parallelism_group = dist.new_group()
+        self._parallelism_group = dist.new_group(timeout=NCCL_DEFAULT_TIMEOUT,)
         self._context_and_model_parallel_group = None
         self._init_context_and_model_parallel_group()
         self.seed = seed
