@@ -18,12 +18,16 @@ PYTORCH_KERNEL_CACHE_PATH = (
 TRITON_CACHE_PATH = f"{LOCAL_CACHE_DIR}/.cache/{getpass.getuser()}/triton/"
 os.makedirs(PYTORCH_KERNEL_CACHE_PATH, exist_ok=True)
 os.makedirs(TRITON_CACHE_PATH, exist_ok=True)
+# this will set by the env from node of launcher
+pythonpath = os.environ["PYTHONPATH"]
 BASE_ENVIRONS = {
     "TOKENIZERS_PARALLELISM": "true",
     "PYTORCH_KERNEL_CACHE_PATH": PYTORCH_KERNEL_CACHE_PATH,
     "TRITON_CACHE_DIR": TRITON_CACHE_PATH,
-    "CUDA_DEVICE_MAX_CONNECTIONS": "1",
-    "PYTHONPATH": str(pathlib.Path(__file__).resolve().parent.parent.parent),
+    "CUDA_DEVICE_MAX_CONNECTIONS": "1",    
+    "PYTHONPATH": pythonpath + ":" + str(pathlib.Path(__file__).resolve().parent.parent.parent),
+    "NCCL_SOCKET_IFNAME": "eth",
+    # "NCCL_DEBUG": "INFO"
 }
 NA132_ENVIRONS = {
     "NCCL_SOCKET_IFNAME": "bond0",
