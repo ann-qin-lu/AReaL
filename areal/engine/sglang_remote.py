@@ -14,7 +14,7 @@ import torch.distributed as dist
 import uvloop
 from tensordict import TensorDict
 from torchdata.stateful_dataloader import StatefulDataLoader
-
+from threading import Lock
 from areal.api.cli_args import InferenceEngineConfig
 from areal.api.engine_api import InferenceEngine
 from areal.api.io_struct import (
@@ -43,6 +43,7 @@ class RemoteSGLangEngine(InferenceEngine):
 
         self.distributed_weight_update_initialized = False
         self._version = 0
+        self.lock = Lock()
 
         self.workflow_executor = WorkflowExecutor(
             config=config,
@@ -106,10 +107,12 @@ class RemoteSGLangEngine(InferenceEngine):
         self.executor.shutdown()
 
     def set_version(self, version):
-        self._version = version
+        with self.lock:
+            self._version = version
 
     def get_version(self):
-        return self._version
+        with self.lock:
+            return self._version
 
     def choose_server(self) -> str:
         if self.config.schedule_policy == "round_robin":
@@ -221,7 +224,8 @@ class RemoteSGLangEngine(InferenceEngine):
             accumulated_output_tokens.extend(output_tokens)
             accumulated_output_logprobs.extend(output_logprobs)
             # FIXME: Update with actual server versions
-            accumulated_versions.extend([-1] * len(output_tokens))
+            # accumulated_versions.extend([-1] * len(output_tokens))
+            accumulated_versions.extend([self.get_version()] * len(output_tokens))
 
             payload["input_ids"] += output_tokens
             sample_params["max_new_tokens"] -= len(output_tokens)
