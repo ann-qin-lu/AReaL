@@ -90,7 +90,7 @@ class WorkflowExecutor:
         self.rollout_stat = RolloutStat()
         
         # Thread pool configuration
-        self.max_rollout_threads = getattr(config, 'max_rollout_threads', 8)
+        self.max_rollout_threads = getattr(config, 'max_rollout_threads', qsize//2) # just reuse qsize here
         self.rollout_executor = None
         self.coordinator_thread = None
         
@@ -353,7 +353,7 @@ class WorkflowExecutor:
         task_id_counter = 0
         pending_tasks = {}  # task_id -> (task_input, thread_id, future)
         last_summary_time = time.time()
-        summary_interval = 10  # Print summary every 10 seconds
+        summary_interval = 60  # Print summary every 10 seconds
         
         while not self.exiting.is_set():
             # Check capacity and assign new tasks
@@ -458,7 +458,8 @@ class WorkflowExecutor:
                 with self.thread_task_lock:
                     load_info = ", ".join([f"T{tid}:{count}" for tid, count in self.thread_task_counts.items()])
                     total_tasks = sum(self.thread_task_counts.values())
-                logger.info(f"📊 [SUMMARY] Pending tasks: {len(pending_tasks)}, Thread loads: [{load_info}], Total active: {total_tasks}, Queue size: {self.input_queue.qsize()}")
+                if total_tasks > 0:
+                    logger.info(f"📊 [SUMMARY] capacity: {capacity}; Pending tasks: {len(pending_tasks)}, Thread loads: [{load_info}], Total active: {total_tasks}, Queue size: {self.input_queue.qsize()}")
                 last_summary_time = current_time
             
             await asyncio.sleep(ROLLOUT_POLL_WAIT_TIME)

@@ -148,8 +148,10 @@ class PPOActor:
 
         # Optionally perform advantage normalization.
         if self.adv_norm is not None:
-            advantages = self.adv_norm(advantages, loss_mask)
-
+            # advantages = self.adv_norm(advantages, loss_mask)
+            # TODO: below is the adv norm implemented in early version of AReal
+            advantages = masked_normalization(advantages, loss_mask)
+        
         # Store data in the dict.
         data["advantages"] = advantages
         data["kl_rewards"] = kl_rewards
